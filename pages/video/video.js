@@ -1,11 +1,18 @@
-import React, {useContext, useEffect, useRef} from 'react';
+import React, {useContext, useEffect, useRef, useState} from 'react';
 import {View, Text} from 'react-native';
 import {useRoute} from '@react-navigation/core';
 import {MainContext} from '../../App';
-import {mediaDevices, RTCPeerConnection} from 'react-native-webrtc';
+import {
+  mediaDevices,
+  RTCPeerConnection,
+  RTCView,
+  RTCIceCandidate,
+} from 'react-native-webrtc';
 
 const Video = () => {
   const CTX = useContext(MainContext);
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
   const userVideoRef = useRef();
   const peerVideoRef = useRef();
   const rtcConnectionRef = useRef(null);
@@ -72,9 +79,9 @@ const Video = () => {
         video: {width: 500, height: 500},
       });
       userStreamRef.current = local;
-      
+      setLocalStream(local);
     } catch (error) {
-      console.log("error ===> ", handleRoomCreated);
+      console.log('error ===> ', handleRoomCreated);
     }
   };
   const handleRoomJoined = async () => {
@@ -84,15 +91,42 @@ const Video = () => {
         video: {width: 500, height: 500},
       });
       userStreamRef.current = local;
-      
+      setLocalStream(local);
     } catch (error) {
-      console.log("error ===> ", handleRoomJoined);
+      console.log('error ===> ', handleRoomJoined);
     }
   };
 
+  const initiateCall = () => {
+    if (hostRef.current) {
+      rtcConnectionRef.current = createPeerConnection();
+      rtcConnectionRef.current.addTrack(
+        userStreamRef.current.getTracks()[0],
+        userStreamRef.current,
+      );
+      rtcConnectionRef.current.addTrack(
+        userStreamRef.current.getTracks()[1],
+        userStreamRef.current,
+      );
+      rtcConnectionRef.current
+        .createOffer()
+        .then(offer => {
+          rtcConnectionRef.current.setLocalDescription(offer);
+          socketRef.current.emit('offer', offer, roomName);
+        })
+        .catch(error => {
+          console.log(error);
+        });
+    }
+  };
 
-
-  const initiateCall = () => {};
+  const ICE_SERVERS = {
+    iceServers: [
+      {
+        urls: 'stun:openrelay.metered.ca:80',
+      },
+    ],
+  };
 
   const createPeerConnection = () => {
     // We create a RTC Peer Connection
@@ -104,19 +138,81 @@ const Video = () => {
     // We implement our onTrack method for when we receive tracks
     connection.ontrack = handleTrackEvent;
     return connection;
-    
   };
-
+  const handleICECandidateEvent = event => {
+    if (event.candidate) {
+      socketRef.current.emit('ice-candidate', event.candidate, roomName);
+    }
+  };
+  const handleTrackEvent = event => {
+    peerVideoRef.current.srcObject = event.streams[0];
+    setRemoteStream(event.streams[0]);
+  };
 
   const onPeerLeave = () => {};
 
-  const handleReceivedOffer = () => {};
-  const handleAnswer = () => {};
-  const handlerNewIceCandidateMsg = () => {};
+  const handleReceivedOffer = offer => {
+    if (!hostRef.current) {
+      rtcConnectionRef.current = createPeerConnection();
+      rtcConnectionRef.current.addTrack(
+        userStreamRef.current.getTracks()[0],
+        userStreamRef.current,
+      );
+      rtcConnectionRef.current.addTrack(
+        userStreamRef.current.getTracks()[1],
+        userStreamRef.current,
+      );
+      rtcConnectionRef.current.setRemoteDescription(offer);
+
+      rtcConnectionRef.current
+        .createAnswer()
+        .then(answer => {
+          rtcConnectionRef.current.setLocalDescription(answer);
+          socketRef.current.emit('answer', answer, roomName);
+        })
+        .catch(error => {
+          console.log(error);
+        });
+    }
+  };
+
+  const handleAnswer = answer => {
+    rtcConnectionRef.current
+      .setRemoteDescription(answer)
+      .catch(err => console.log(err));
+  };
+
+  const handlerNewIceCandidateMsg = incoming => {
+    // We cast the incoming candidate to RTCIceCandidate
+    const candidate = new RTCIceCandidate(incoming);
+    rtcConnectionRef.current
+      .addIceCandidate(candidate)
+      .catch(e => console.log(e));
+  };
 
   return (
     <View>
-      <Text style={{color: 'red'}}>Loading Here</Text>
+      {localStream ? (
+        <RTCView
+          streamURL={localStream?.toURL()}
+          style={{height: 150, width: 150}}
+          objectFit="cover"
+          mirror
+        />
+      ) : (
+        <Text style={{color: 'red'}}>Loading Here</Text>
+      )}
+
+      {remoteStream ? (
+        <RTCView
+          streamURL={remoteStream?.toURL()}
+          style={{height: 150, width: 150}}
+          objectFit="cover"
+          mirror
+        />
+      ) : (
+        <Text style={{color: 'red'}}>Loading Here</Text>
+      )}
     </View>
   );
 };
