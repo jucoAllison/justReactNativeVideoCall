@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useRef, useState} from 'react';
-import {View, Text, TouchableOpacity} from 'react-native';
+import {View, Text} from 'react-native';
 import {useRoute} from '@react-navigation/core';
 import {MainContext} from '../../App';
 import {
@@ -27,7 +27,7 @@ const Video = () => {
     iceServers: [
       {
         urls: [
-          'stun:stun1.l.google.com:19302',
+          // 'stun:stun1.l.google.com:19302',
           'stun:stun2.l.google.com:19302',
         ],
       },
@@ -79,13 +79,16 @@ const Video = () => {
         audio: true,
         video: {width: 500, height: 500},
       });
-      userStreamRef.current = local;
+      userStreamRef.current = await local;
       setLocalStream(local);
       CTX.socketObj.emit('ready', roomName);
     } catch (error) {
       console.log('error from handleRoomJoined ===> ', handleRoomJoined);
     }
   };
+
+
+
 
   const handleRoomCreated = async () => {
     try {
@@ -94,16 +97,21 @@ const Video = () => {
         audio: true,
         video: {width: 500, height: 500},
       });
-      userStreamRef.current = local;
+      userStreamRef.current = await local;
       setLocalStream(local);
     } catch (error) {
       console.log('error ===> ', handleRoomCreated);
     }
   };
 
-  const initiateCall = () => {
+
+
+
+
+
+  const initiateCall = async () => {
     if (hostRef.current) {
-      rtcConnectionRef.current = createPeerConnection();
+      rtcConnectionRef.current = await createPeerConnection();
       rtcConnectionRef.current.addTrack(
         userStreamRef.current.getTracks()[0],
         userStreamRef.current,
@@ -124,6 +132,12 @@ const Video = () => {
     }
   };
 
+
+
+
+
+  
+
   const ICE_SERVERS = {
     iceServers: [
       {
@@ -132,15 +146,15 @@ const Video = () => {
     ],
   };
 
-  const createPeerConnection = () => {
+  const createPeerConnection = async () => {
     // We create a RTC Peer Connection
-    const connection = new RTCPeerConnection(servers);
+    const connection = await new RTCPeerConnection(servers);
 
     // We implement our onicecandidate method for when we received a ICE candidate from the STUN server
-    connection.onicecandidate = handleICECandidateEvent;
+    connection.onicecandidate = await handleICECandidateEvent;
 
     // We implement our onTrack method for when we receive tracks
-    connection.ontrack = handleTrackEvent;
+    connection.ontrack = await handleTrackEvent;
     return connection;
   };
   const handleICECandidateEvent = event => {
@@ -153,25 +167,11 @@ const Video = () => {
     setRemoteStream(event.streams[0]);
   };
 
-  const onPeerLeave = () => {
-    // This person is now the creator because they are the only person in the room.
-    hostRef.current = true;
-    if (remoteStream) {
-      remoteStream.getTracks().forEach(track => track.stop()); // Stops receiving all track of Peer.
-    }
+  const onPeerLeave = () => {};
 
-    // Safely closes the existing connection established with the peer who left.
-    if (rtcConnectionRef.current) {
-      rtcConnectionRef.current.ontrack = null;
-      rtcConnectionRef.current.onicecandidate = null;
-      rtcConnectionRef.current.close();
-      rtcConnectionRef.current = null;
-    }
-  };
-
-  const handleReceivedOffer = offer => {
+  const handleReceivedOffer = async offer => {
     if (!hostRef.current) {
-      rtcConnectionRef.current = createPeerConnection();
+      rtcConnectionRef.current = await createPeerConnection();
       rtcConnectionRef.current.addTrack(
         userStreamRef.current.getTracks()[0],
         userStreamRef.current,
@@ -200,32 +200,12 @@ const Video = () => {
       .catch(err => console.log(err));
   };
 
-  const handlerNewIceCandidateMsg = incoming => {
+  const handlerNewIceCandidateMsg = async incoming => {
     // We cast the incoming candidate to RTCIceCandidate
-    const candidate = new RTCIceCandidate(incoming);
+    const candidate = await new RTCIceCandidate(incoming);
     rtcConnectionRef.current
       .addIceCandidate(candidate)
       .catch(e => console.log(e));
-  };
-
-  const leaveRoom = () => {
-    CTX.socketObj.emit('leave', roomName); // Let's the server know that user has left the room.
-
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop()); // Stops receiving all track of User.
-    }
-    if (remoteStream) {
-      remoteStream.getTracks().forEach(track => track.stop()); // Stops receiving audio track of Peer.
-    }
-
-    // Checks if there is peer on the other side and safely closes the existing connection established with the peer.
-    if (rtcConnectionRef.current) {
-      rtcConnectionRef.current.ontrack = null;
-      rtcConnectionRef.current.onicecandidate = null;
-      rtcConnectionRef.current.close();
-      rtcConnectionRef.current = null;
-    }
-    navigation.navigate('Home');
   };
 
   return (
@@ -242,22 +222,16 @@ const Video = () => {
       )}
 
       {remoteStream ? (
-        <>
-          <RTCView
-            streamURL={remoteStream?.toURL()}
-            style={{height: 150, width: 150}}
-            objectFit="cover"
-            mirror
-          />
-          <TouchableOpacity
-            onPress={leaveRoom}
-            style={{backgroundColor: '#d00'}}>
-            <Text style={{color: '#fff'}}>End Call</Text>
-          </TouchableOpacity>
-        </>
+        <RTCView
+          streamURL={remoteStream?.toURL()}
+          style={{height: 150, width: 150}}
+          objectFit="cover"
+          mirror
+        />
       ) : (
         <Text style={{color: 'red'}}>Loading Here</Text>
       )}
+      
     </View>
   );
 };
