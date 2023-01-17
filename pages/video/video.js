@@ -156,8 +156,8 @@ const Video = () => {
   //     });
 
   //     // Events that are webRTC speccific
-  //     CTX.socketObj.on('offer', handleReceivedOffer);
-  //     CTX.socketObj.on('answer', handleAnswer);
+      CTX.socketObj.on('offer', handleReceivedOffer);
+      CTX.socketObj.on('answer', handleAnswer);
       CTX.socketObj.on('ice-candidate', handlerNewIceCandidateMsg);
     }
 
